@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Blood Management System</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #e53935, #e35d5b);
+      color: #fff;
+    }
+
+    .container {
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      padding: 20px;
+    }
+
+    #auth,
+    #dashboard {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 30px;
+      border-radius: 10px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+      width: 100%;
+      max-width: 400px;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: none;
+      border-radius: 5px;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #fff;
+      color: #e53935;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #f8d7da;
+    }
+
+    #results {
+      margin-top: 20px;
+      background-color: rgba(255, 255, 255, 0.2);
+      padding: 15px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="auth">
+      <h1>Blood Management Login</h1>
+      <div id="loginForm">
+        <input type="email" id="loginEmail" placeholder="Email" required />
+        <input type="password" id="loginPassword" placeholder="Password" required />
+        <button onclick="login()">Login</button>
+        <p>Don't have an account? <a href="#" onclick="toggleSignup(true)">Sign up</a></p>
+      </div>
+
+      <div id="signupForm" style="display: none">
+        <input type="text" id="signupName" placeholder="Name" required />
+        <input type="email" id="signupEmail" placeholder="Email" required />
+        <input type="text" id="signupPhone" placeholder="Phone Number" required />
+        <input type="text" id="signupAddress" placeholder="Current Address" required />
+        <input type="text" id="signupBloodGroup" placeholder="Blood Group" required />
+        <input type="password" id="signupPassword" placeholder="Password" required />
+        <button onclick="signup()">Sign Up</button>
+        <p>Already have an account? <a href="#" onclick="toggleSignup(false)">Login</a></p>
+      </div>
+    </div>
+
+    <div id="dashboard" style="display: none">
+      <h1>Welcome to Blood Bank</h1>
+      <input type="text" id="searchGroup" placeholder="Search Blood Group (e.g. A+, O-)" />
+      <button onclick="searchBlood()">Search</button>
+      <div id="results"></div>
+    </div>
+  </div>
+
+  <script>
+    // Replace this with your own Firebase config!
+    const firebaseConfig = {
+  apiKey: "AIzaSyAl9RxHjxJYxlExPXXZl45dr6KkLp1UttE",
+  authDomain: "blood-management-d9c2d.firebaseapp.com",
+  databaseURL: "https://blood-management-d9c2d-default-rtdb.firebaseio.com",
+  projectId: "blood-management-d9c2d",
+  storageBucket: "blood-management-d9c2d.appspot.com",
+  messagingSenderId: "326150212467",
+  appId: "1:326150212467:web:c884df1ac2af5239025306"
+};
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const auth = firebase.auth();
+
+    function toggleSignup(showSignup) {
+      document.getElementById("loginForm").style.display = showSignup ? "none" : "block";
+      document.getElementById("signupForm").style.display = showSignup ? "block" : "none";
+    }
+
+    function signup() {
+      const name = document.getElementById("signupName").value.trim();
+      const email = document.getElementById("signupEmail").value.trim();
+      const phone = document.getElementById("signupPhone").value.trim();
+      const address = document.getElementById("signupAddress").value.trim();
+      const bloodGroup = document.getElementById("signupBloodGroup").value.trim().toUpperCase();
+      const password = document.getElementById("signupPassword").value;
+
+      if (!name || !email || !phone || !address || !bloodGroup || !password) {
+        alert("Please fill in all fields");
+        return;
+      }
+
+      auth.createUserWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+          const uid = userCredential.user.uid;
+          db.ref("users/" + uid).set({ name, email, phone, address, bloodGroup });
+          alert("Signup successful");
+          toggleSignup(false);
+        })
+        .catch((error) => alert(error.message));
+    }
+
+    function login() {
+      const email = document.getElementById("loginEmail").value;
+      const password = document.getElementById("loginPassword").value;
+
+      if (!email || !password) {
+        alert("Please fill in all fields");
+        return;
+      }
+
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => {
+          document.getElementById("auth").style.display = "none";
+          document.getElementById("dashboard").style.display = "block";
+        })
+        .catch((error) => alert("Login failed: " + error.message));
+    }
+
+    function searchBlood() {
+      const group = document.getElementById("searchGroup").value.trim().toUpperCase();
+      const resultsDiv = document.getElementById("results");
+      resultsDiv.innerHTML = "Searching...";
+
+      db.ref("users").once("value", (snapshot) => {
+        const data = snapshot.val();
+        const matches = [];
+
+        for (let uid in data) {
+          if (data[uid].bloodGroup && data[uid].bloodGroup.toUpperCase() === group) {
+            matches.push(data[uid]);
+          }
+        }
+
+        if (matches.length > 0) {
+          resultsDiv.innerHTML = matches
+            .map(
+              (user) =>
+                `<p><strong>${user.name}</strong><br>📞 ${user.phone}<br>📍 ${user.address}</p>`
+            )
+            .join("<hr>");
+        } else {
+          resultsDiv.innerHTML = "No donors found for this blood group.";
+        }
+      });
+    }
+  </script>
+</body>
+</html>
